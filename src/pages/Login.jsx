@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore'; 
 import { db } from '../firebase'; 
@@ -8,37 +8,45 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // 1. Watch the PIN. If it hits 4 digits, try to log in automatically.
+  useEffect(() => {
+    if (pin.length === 4) {
+      attemptLogin(pin);
+    }
+  }, [pin]);
+
   const handleNum = (num) => {
     if (pin.length < 4) setPin(pin + num);
   };
 
   const handleClear = () => setPin('');
 
-  const handleLogin = async () => {
-    if (pin.length !== 4) return;
-    
+  // 2. Extracted Login Logic so it can be called by the Button OR the Auto-Trigger
+  const attemptLogin = async (inputPin) => {
+    if (loading) return; // Don't run twice
     setLoading(true);
     
     try {
-      const q = query(collection(db, "staff"), where("pin", "==", pin));
+      const q = query(collection(db, "staff"), where("pin", "==", inputPin));
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
-        // Found the user!
+        // Success
         const staffData = querySnapshot.docs[0].data();
-        
-        // SAVE NAME TO MEMORY
         localStorage.setItem("staffName", staffData.name); 
         localStorage.setItem("staffRole", staffData.role);
-
         navigate('/dashboard');
       } else {
-        alert("Invalid PIN. Access Denied.");
-        setPin('');
+        // Failure
+        // Small delay to allow the user to see the 4th dot appear before alerting
+        setTimeout(() => {
+            alert("Invalid PIN.");
+            setPin('');
+        }, 100);
       }
     } catch (error) {
       console.error("Error logging in:", error);
-      alert("Connection Error. Check your internet.");
+      alert("Connection Error.");
     }
     
     setLoading(false);
@@ -59,32 +67,32 @@ function Login() {
           <button 
             key={num} 
             onClick={() => handleNum(num.toString())}
-            style={{ padding: '20px', fontSize: '24px', borderRadius: '10px', border: '1px solid #555', cursor: 'pointer', background: '#333', color: 'white' }}
+            style={numBtnStyle}
           >
             {num}
           </button>
         ))}
         
-        {/* CLR Button (Red Background, White Text) */}
+        {/* Red CLR Button */}
         <button 
           onClick={handleClear} 
-          style={{ padding: '20px', background: '#dc3545', color: 'white', fontWeight: 'bold', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize:'18px' }}
+          style={{...numBtnStyle, background: '#dc3545', color: 'white', border:'none', fontSize:'18px'}}
         >
           CLR
         </button>
 
         <button 
           onClick={() => handleNum('0')} 
-          style={{ padding: '20px', fontSize: '24px', borderRadius: '10px', border: '1px solid #555', cursor: 'pointer', background: '#333', color: 'white' }}
+          style={numBtnStyle}
         >
           0
         </button>
 
-        {/* GO Button (Green Background, White Text) */}
+        {/* GO Button (Still here, but mostly optional now) */}
         <button 
-          onClick={handleLogin} 
-          disabled={loading}
-          style={{ padding: '20px', color: 'white', background: loading ? '#ccc' : 'green', fontWeight: 'bold', borderRadius: '10px', border: 'none', cursor: 'pointer', fontSize:'18px' }}
+          onClick={() => attemptLogin(pin)} 
+          disabled={loading || pin.length !== 4}
+          style={{...numBtnStyle, background: loading ? '#ccc' : 'green', color: 'white', border:'none', fontSize:'18px'}}
         >
           {loading ? "..." : "GO"}
         </button>
@@ -92,5 +100,7 @@ function Login() {
     </div>
   );
 }
+
+const numBtnStyle = { padding: '20px', fontSize: '24px', borderRadius: '10px', border: '1px solid #555', cursor: 'pointer', background: '#333', color: 'white' };
 
 export default Login;

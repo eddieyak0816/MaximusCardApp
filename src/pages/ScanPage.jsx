@@ -36,12 +36,24 @@ function ScanPage() {
 
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-      <button 
-        onClick={() => navigate('/dashboard')}
-        style={{marginBottom:'20px', background:'transparent', border:'1px solid #777', color:'white', padding:'8px 16px', borderRadius:'4px', cursor:'pointer'}}
-      >
-        &larr; Back to Dashboard
-      </button>
+      
+      {/* BACK BUTTON */}
+      <div style={{width:'100%', textAlign:'left', marginBottom:'10px'}}>
+        <button 
+          onClick={() => navigate('/dashboard')}
+          style={{
+            background: 'transparent', 
+            border: '1px solid #777', 
+            color: 'white', 
+            padding: '10px 20px', 
+            borderRadius: '4px', 
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+        >
+          &larr; Back to Dashboard
+        </button>
+      </div>
 
       <h2>📷 Scan Customer Card</h2>
       
