@@ -37,8 +37,8 @@ function ScanPage() {
   return (
     <div style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
       
-      {/* BACK BUTTON */}
-      <div style={{width:'100%', textAlign:'left', marginBottom:'10px'}}>
+      {/* BACK BUTTON - CENTERED */}
+      <div style={{marginBottom:'20px'}}>
         <button 
           onClick={() => navigate('/dashboard')}
           style={{

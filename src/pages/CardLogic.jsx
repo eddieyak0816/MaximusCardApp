@@ -12,7 +12,7 @@ function CardLogic() {
   const [customerData, setCustomerData] = useState(null);
   const [history, setHistory] = useState([]);
 
-  // Registration
+  // Registration States
   const [mode, setMode] = useState('new'); 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -20,23 +20,33 @@ function CardLogic() {
   const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '', address: '', city: '', state: '', zip: '', notes: '', newsletter: false });
   const [cardPin, setCardPin] = useState("");
 
+  // TRANSACTION MODAL STATE
+  const [transModal, setTransModal] = useState({ isOpen: false, type: '' });
+  const [transAmount, setTransAmount] = useState("");
+  const [transNote, setTransNote] = useState("");
+
   useEffect(() => {
     const loadData = async () => {
       try {
         const cardRef = doc(db, "cards", cardId);
         const cardSnap = await getDoc(cardRef);
+
         if (cardSnap.exists()) {
           const cData = cardSnap.data();
           setCardData(cData);
           if (cData.customerId) {
             const custRef = doc(db, "customers", cData.customerId);
             const custSnap = await getDoc(custRef);
-            if (custSnap.exists()) setCustomerData(custSnap.data());
+            if (custSnap.exists()) {
+                setCustomerData({ id: custSnap.id, ...custSnap.data() });
+            }
           }
           const q = query(collection(db, "transactions"), where("cardId", "==", cardId), orderBy("date", "desc"), limit(10));
           const historySnap = await getDocs(q);
           setHistory(historySnap.docs.map(d => d.data()));
-        } else { setCardData(null); }
+        } else {
+          setCardData(null);
+        }
       } catch (error) { console.error(error); }
       setLoading(false);
     };
@@ -81,18 +91,10 @@ function CardLogic() {
     } catch (error) { console.error(error); alert("Error activating."); setLoading(false); }
   };
 
-  const handleAddFunds = async () => {
-    const amountStr = prompt("Enter amount to ADD ($):");
-    if (!amountStr) return;
-    await processTransaction(parseFloat(amountStr), "CREDIT");
-  };
-
-  const handleSpend = async () => {
-    const amountStr = prompt("Enter amount to CHARGE ($):");
-    if (!amountStr) return;
-    const amount = parseFloat(amountStr);
-    if (amount > cardData.balance) { alert("❌ Insufficient Funds!"); return; }
-    await processTransaction(-amount, "SPEND");
+  const openTransModal = (type) => {
+    setTransModal({ isOpen: true, type });
+    setTransAmount("");
+    setTransNote("");
   };
 
   const handleViewPin = async () => {
@@ -103,62 +105,136 @@ function CardLogic() {
     if (!snap.empty) alert(`🔐 PIN: ${cardData.pin}`); else alert("❌ Access Denied.");
   };
 
-  const processTransaction = async (amount, type) => {
-    if (isNaN(amount) || amount === 0) return;
+  const submitTransaction = async () => {
+    const amount = parseFloat(transAmount);
+    if (isNaN(amount) || amount <= 0) { alert("Invalid Amount"); return; }
+    if (transModal.type === 'SPEND' && amount > cardData.balance) { alert("❌ Insufficient Funds!"); return; }
+
     setLoading(true);
     try {
-      const newBalance = cardData.balance + amount;
+      const finalAmount = transModal.type === 'CREDIT' ? amount : -amount;
+      const newBalance = cardData.balance + finalAmount;
       await updateDoc(doc(db, "cards", cardId), { balance: newBalance });
-      await addDoc(collection(db, "transactions"), { cardId: cardId, type, amount: Math.abs(amount), date: Timestamp.now(), balanceAfter: newBalance });
-      alert("✅ Success!"); window.location.reload();
+      await addDoc(collection(db, "transactions"), {
+        cardId: cardId, type: transModal.type, amount: Math.abs(amount), note: transNote, date: Timestamp.now(), balanceAfter: newBalance
+      });
+      alert("✅ Success!");
+      window.location.reload();
     } catch (error) { alert("Failed."); setLoading(false); }
+  };
+
+  const goToProfile = () => {
+    if (customerData && customerData.id) {
+        navigate('/customers', { state: { customerId: customerData.id } });
+    }
   };
 
   if (loading) return <div style={{padding:'20px'}}>Loading...</div>;
 
+  // --- VIEW: EXISTING CARD ---
   if (cardData && customerData) {
     return (
-      <div style={{ padding: '20px', width: '100%', maxWidth:'1000px', margin:'0 auto' }}>
-        <button onClick={() => navigate('/dashboard')} style={backBtnStyle}>← Back</button>
+      <div style={{ padding: '20px', width: '100%', maxWidth:'1000px', margin:'0 auto', textAlign:'center' }}>
+        
+        {/* UPDATED BACK BUTTON */}
+        <div style={{marginBottom:'20px'}}>
+            <button 
+                onClick={() => navigate('/dashboard')} 
+                style={{background:'transparent', color:'white', border:'1px solid #777', padding:'10px 20px', borderRadius:'4px', cursor:'pointer', fontSize:'16px'}}
+            >
+            &larr; Back to Dashboard
+            </button>
+        </div>
+        
+        {transModal.isOpen && (
+            <div style={{position:'fixed', top:0, left:0, right:0, bottom:0, background:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:100}}>
+                <div style={{background:'white', padding:'30px', borderRadius:'10px', width:'300px', textAlign:'center', color:'black'}}>
+                    <h2 style={{marginTop:0}}>{transModal.type === 'CREDIT' ? 'Add Funds' : 'Charge Card'}</h2>
+                    <label style={{display:'block', textAlign:'left', fontWeight:'bold', marginBottom:'5px'}}>Amount ($)</label>
+                    <input type="number" value={transAmount} onChange={e => setTransAmount(e.target.value)} autoFocus style={{width:'100%', padding:'10px', fontSize:'20px', marginBottom:'15px', border:'2px solid #007bff'}} />
+                    <label style={{display:'block', textAlign:'left', fontWeight:'bold', marginBottom:'5px'}}>Note (Optional)</label>
+                    <input type="text" value={transNote} onChange={e => setTransNote(e.target.value)} placeholder="e.g. Cash, T-Shirt, Event" style={{width:'100%', padding:'10px', fontSize:'16px', marginBottom:'20px', border:'1px solid #ccc'}} />
+                    <div style={{display:'flex', gap:'10px'}}>
+                        <button onClick={submitTransaction} style={{flex:1, padding:'15px', background:'green', color:'white', border:'none', borderRadius:'5px', cursor:'pointer', fontWeight:'bold'}}>CONFIRM</button>
+                        <button onClick={() => setTransModal({isOpen:false, type:''})} style={{flex:1, padding:'15px', background:'#ccc', color:'black', border:'none', borderRadius:'5px', cursor:'pointer'}}>CANCEL</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div style={{ border: '2px solid #333', borderRadius: '10px', padding: '20px', background: '#f9f9f9', textAlign:'center', color: 'black' }}>
-          <h2 style={{margin:'0'}}>{customerData.firstName} {customerData.lastName}</h2>
+          <div onClick={goToProfile} title="Click to view Customer Profile" style={{cursor:'pointer', display:'inline-block'}}>
+              <h2 style={{margin:'0', textDecoration:'underline', color:'#007bff'}}>{customerData.firstName} {customerData.lastName} 🔗</h2>
+          </div>
           <p style={{color:'#666'}}>{customerData.email} | {customerData.phone}</p>
           <button onClick={handleViewPin} style={pinBtnStyle}>🔐 View Card PIN</button>
           <hr />
           <div style={{fontSize:'14px', color:'#555'}}>CURRENT BALANCE</div>
           <div style={{ fontSize: '48px', fontWeight: 'bold', color: cardData.balance > 0 ? 'green' : 'black' }}>${cardData.balance.toFixed(2)}</div>
         </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '20px' }}>
-          <button onClick={handleAddFunds} style={{...actionBtn, background:'#28a745'}}>+ ADD FUNDS</button>
-          <button onClick={handleSpend} style={{...actionBtn, background:'#dc3545'}}>- SPEND</button>
+          <button onClick={() => openTransModal('CREDIT')} style={{...actionBtn, background:'#28a745'}}>+ ADD FUNDS</button>
+          <button onClick={() => openTransModal('SPEND')} style={{...actionBtn, background:'#dc3545'}}>- SPEND</button>
         </div>
-        <div style={{marginTop:'20px', background:'#fff', padding:'10px', border:'1px solid #ddd', color: 'black'}}><strong>📝 Notes:</strong> {customerData.notes || "None"}</div>
-        <h3 style={{marginTop:'30px', color:'white'}}>History</h3>
-        <div style={{ background: '#fff', border: '1px solid #ddd', color: 'black' }}>
-          {history.map((t, index) => (
-            <div key={index} style={{ display:'flex', justifyContent:'space-between', padding:'10px', borderBottom:'1px solid #eee', alignItems:'center' }}>
-              <div>
-                <div style={{fontWeight:'bold'}}>{new Date(t.date.seconds * 1000).toLocaleDateString()}</div>
-                <div style={{fontSize:'12px', color:'#555'}}>{new Date(t.date.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-              </div>
-              <span style={{fontWeight:'bold', color: t.type === 'CREDIT' ? 'green' : 'red', fontSize:'16px'}}>{t.type === 'CREDIT' ? '+' : '-'}${t.amount.toFixed(2)}</span>
-            </div>
-          ))}
+
+        <div style={{marginTop:'20px', background:'#fff', padding:'10px', border:'1px solid #ddd', color: 'black', textAlign:'left'}}>
+            <strong>📝 Notes:</strong> {customerData.notes || "None"}
+        </div>
+
+        <h3 style={{marginTop:'30px', color:'white', textAlign:'left'}}>History</h3>
+        <div style={{ background: '#fff', border: '1px solid #ddd', color: 'black', overflowX:'auto' }}>
+            <table style={{width:'100%', borderCollapse:'collapse'}}>
+                <thead>
+                    <tr style={{background:'#eee', borderBottom:'2px solid #ccc'}}>
+                        <th style={thStyle}>Date</th>
+                        <th style={thStyle}>Note</th>
+                        <th style={thStyle}>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {history.map((t, index) => (
+                        <tr key={index} style={{borderBottom:'1px solid #eee'}}>
+                            <td style={tdStyle}>
+                                <div style={{fontWeight:'bold'}}>{new Date(t.date.seconds * 1000).toLocaleDateString()}</div>
+                                <div style={{fontSize:'12px', color:'#555'}}>{new Date(t.date.seconds * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                            </td>
+                            <td style={tdStyle}>
+                                {t.note || <span style={{color:'#999', fontStyle:'italic'}}>-</span>}
+                            </td>
+                            <td style={{...tdStyle, fontWeight:'bold', color: t.type === 'CREDIT' ? 'green' : 'red'}}>
+                                {t.type === 'CREDIT' ? '+' : '-'}${t.amount.toFixed(2)}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
       </div>
     );
   }
 
+  // --- VIEW: ACTIVATE NEW CARD ---
   return (
-    <div style={{ padding: '20px', width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-      <button onClick={() => navigate('/dashboard')} style={backBtnStyle}>← Dashboard</button>
+    <div style={{ padding: '20px', width: '100%', maxWidth: '800px', margin: '0 auto', textAlign:'center' }}>
+        
+        {/* UPDATED BACK BUTTON */}
+        <div style={{marginBottom:'20px'}}>
+            <button 
+                onClick={() => navigate('/dashboard')} 
+                style={{background:'transparent', color:'white', border:'1px solid #777', padding:'10px 20px', borderRadius:'4px', cursor:'pointer', fontSize:'16px'}}
+            >
+            &larr; Back to Dashboard
+            </button>
+        </div>
+
       <h2>🆕 Activate Card: {cardId}</h2>
       <div style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
         <button onClick={() => setMode('new')} style={{...tabBtn, background: mode==='new' ? '#007bff' : '#333'}}>New Customer</button>
         <button onClick={() => setMode('search')} style={{...tabBtn, background: mode==='search' ? '#007bff' : '#333'}}>Link Existing</button>
       </div>
       {mode === 'search' && (
-        <div style={{background:'#333', padding:'20px', borderRadius:'8px'}}>
+        <div style={{background:'#333', padding:'20px', borderRadius:'8px', textAlign:'left'}}>
             <p>Search by exact Phone or Email:</p>
             <div style={{display:'flex', gap:'10px'}}>
                 <input placeholder="Enter phone or email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{flex:1, padding:'10px'}} />
@@ -192,9 +268,11 @@ function CardLogic() {
     </div>
   );
 }
-const backBtnStyle = {marginBottom:'10px', background:'transparent', border:'1px solid #777', color:'white', padding:'5px 10px'};
 const pinBtnStyle = {marginTop:'5px', background:'#eee', border:'1px solid #ccc', borderRadius:'4px', fontSize:'12px', padding:'5px', cursor:'pointer', color:'#333'};
 const actionBtn = { padding: '20px', color: 'white', border: 'none', borderRadius: '5px', fontSize: '16px', cursor:'pointer' };
 const tabBtn = { flex:1, padding:'10px', color:'white', border:'1px solid #555', cursor:'pointer' };
 const inputStyle = { padding: '10px', fontSize: '16px', border: '1px solid #ccc', borderRadius: '5px' };
+const thStyle = { padding: '12px', textAlign: 'left', fontWeight:'bold', borderBottom:'1px solid #ccc' };
+const tdStyle = { padding: '12px', textAlign: 'left' };
+
 export default CardLogic;
