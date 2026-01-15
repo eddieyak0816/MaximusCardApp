@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -18,3 +18,6 @@ const app = initializeApp(firebaseConfig);
 // Export the database tools
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Sign in anonymously so the client can read/write when rules require auth
+signInAnonymously(auth).catch(e => console.error('Anon sign-in failed:', e));

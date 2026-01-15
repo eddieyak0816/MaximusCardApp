@@ -45,7 +45,13 @@ function StaffManager() {
   const handleCancelEdit = () => { setEditingId(null); setNewName(""); setNewPin(""); setNewRole("cashier"); };
   const handleDelete = async (id, name) => {
     if (window.confirm(`Are you sure you want to remove ${name}?`)) {
-      try { await deleteDoc(doc(db, "staff", id)); fetchStaff(); } catch (error) { alert("Error deleting staff."); }
+      try {
+        await deleteDoc(doc(db, "staff", id));
+        fetchStaff();
+      } catch (error) {
+        console.error("Delete staff error:", error);
+        alert("Error deleting staff: " + (error?.message || error));
+      }
     }
   };
 
