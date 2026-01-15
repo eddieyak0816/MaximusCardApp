@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'; // Added useEffect
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore'; 
-import { db } from '../firebase'; 
+import { db, auth } from '../firebase'; 
 
 function Login() {
   const [pin, setPin] = useState('');
@@ -27,6 +27,9 @@ function Login() {
     setLoading(true);
     
     try {
+      // Show auth state so we can confirm anonymous login on live site
+      console.log('Auth currentUser:', auth.currentUser);
+
       const q = query(collection(db, "staff"), where("pin", "==", inputPin));
       const querySnapshot = await getDocs(q);
 
@@ -45,8 +48,9 @@ function Login() {
         }, 100);
       }
     } catch (error) {
-      console.error("Error logging in:", error);
-      alert("Connection Error.");
+      console.error("Login error:", error);
+      alert(`Connection Error: ${error?.message || error}`);
+      setPin('');
     }
     
     setLoading(false);
