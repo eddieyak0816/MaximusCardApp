@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 
 function StaffManager() {
   const navigate = useNavigate();
@@ -46,6 +46,7 @@ function StaffManager() {
   const handleDelete = async (id, name) => {
     if (window.confirm(`Are you sure you want to remove ${name}?`)) {
       try {
+        console.log('Auth currentUser:', auth.currentUser);
         await deleteDoc(doc(db, "staff", id));
         fetchStaff();
       } catch (error) {
